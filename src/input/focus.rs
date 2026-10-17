@@ -1,13 +1,19 @@
 use std::cell::RefCell;
 
+use std::rc::Rc;
+
 use crate::Key;
 
 use super::KeyHandler;
+
+// what a text input does with pasted text
+pub type PasteHandler = Rc<dyn Fn(&str)>;
 
 // the text input that typed keys go to, and what it does with them
 struct Focus {
     id: &'static str,
     on_key: KeyHandler,
+    on_paste: PasteHandler,
 }
 
 thread_local! {
@@ -15,8 +21,27 @@ thread_local! {
     static FOCUS: RefCell<Option<Focus>> = const { RefCell::new(None) };
 }
 
-pub fn set(id: &'static str, on_key: KeyHandler) {
-    FOCUS.set(Some(Focus { id, on_key }));
+pub fn set(id: &'static str, on_key: KeyHandler, on_paste: PasteHandler) {
+    FOCUS.set(Some(Focus { id, on_key, on_paste }));
+}
+
+// whether some text input takes keys right now
+pub fn active() -> bool {
+    FOCUS.with_borrow(Option::is_some)
+}
+
+// returns whether a text input took the text
+pub fn paste(text: &str) -> bool {
+    // copied out first, so the handler is free to change the focus itself
+    let on_paste = FOCUS.with_borrow(|focus| focus.as_ref().map(|focus| focus.on_paste.clone()));
+
+    let Some(on_paste) = on_paste else {
+        return false;
+    };
+
+    on_paste(text);
+
+    true
 }
 
 pub fn clear() {

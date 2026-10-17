@@ -54,6 +54,17 @@ impl KeyboardHandler for WaylandState {
             return;
         };
 
+        // the clipboard goes into a focused text input in one piece
+        if is_paste(&event, self.modifiers) && focus::active() {
+            if let Some(text) = self.clipboard_text() {
+                focus::paste(&text);
+            }
+
+            self.request_frame_on(&surface);
+
+            return;
+        }
+
         let key = to_key(&event);
 
         // a focused text input takes the key before the window's on_key sees it
@@ -104,11 +115,25 @@ impl KeyboardHandler for WaylandState {
         _: &QueueHandle<Self>,
         _: &WlKeyboard,
         _: u32,
-        _: Modifiers,
+        modifiers: Modifiers,
         _: RawModifiers,
         _: u32,
     ) {
+        self.modifiers = modifiers;
     }
+}
+
+// the evdev codes of the v and insert keys, the same in every layout
+const KEY_V: u32 = 47;
+const KEY_INSERT: u32 = 110;
+
+// ctrl+v, ctrl+shift+v or shift+insert; the v is found by its place, so it works in any layout
+fn is_paste(event: &KeyEvent, modifiers: Modifiers) -> bool {
+    let ctrl_v = modifiers.ctrl && !modifiers.alt && event.raw_code == KEY_V;
+
+    let shift_insert = modifiers.shift && !modifiers.ctrl && event.raw_code == KEY_INSERT;
+
+    ctrl_v || shift_insert
 }
 
 fn to_key(event: &KeyEvent) -> Key {

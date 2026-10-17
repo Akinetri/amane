@@ -1,3 +1,4 @@
+mod clipboard;
 mod compositor;
 mod dropped;
 mod keyboard;
@@ -19,6 +20,7 @@ use smithay_client_toolkit::reexports::protocols::wp::{
     fractional_scale::v1::client::wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
     viewporter::client::wp_viewporter::WpViewporter,
 };
+use smithay_client_toolkit::seat::keyboard::Modifiers;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     data_device_manager::{DataDeviceManagerState, data_device::DataDevice},
@@ -56,6 +58,9 @@ struct WaylandState {
 
     // keys do not say which window they are for, so the window that has focus is kept
     keyboard_focus: Option<WlSurface>,
+
+    // ctrl and shift, for the paste shortcuts
+    modifiers: Modifiers,
 
     registry: RegistryState,
     output: OutputState,
@@ -142,6 +147,8 @@ impl WaylandApp {
             scale_factor,
 
             keyboard_focus: None,
+
+            modifiers: Modifiers::default(),
 
             registry: RegistryState::new(&globals),
             output: OutputState::new(&globals, &qh),

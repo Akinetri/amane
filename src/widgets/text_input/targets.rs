@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::graphics::Area;
+use crate::input::focus::PasteHandler;
 use crate::input::{Cursor, Handlers, KeyHandler, Target, focus};
 use crate::{Button, Key};
 
@@ -9,14 +10,15 @@ use super::{TextHandler, TextInput, fields};
 pub fn collect_targets(text_input: &TextInput, area: Area, targets: &mut Vec<Target>) {
     let id = text_input.id;
     let on_key = key_handler(text_input);
+    let on_paste = paste_handler(text_input);
 
     // the handler holds this redraw's on_change and on_submit, so a focused input takes the new one
     if focus::has(id) || text_input.focused {
-        focus::set(id, on_key.clone());
+        focus::set(id, on_key.clone(), on_paste.clone());
     }
 
     let on_click = move |_: Button| {
-        focus::set(id, on_key.clone());
+        focus::set(id, on_key.clone(), on_paste.clone());
     };
 
     let handlers = Handlers {
@@ -42,6 +44,32 @@ fn key_handler(text_input: &TextInput) -> KeyHandler {
     };
 
     Rc::new(on_key)
+}
+
+// the whole text goes in at the cursor, and on_change hears about it once
+fn paste_handler(text_input: &TextInput) -> PasteHandler {
+    let id = text_input.id;
+
+    let on_change = text_input.on_change.clone();
+
+    let on_paste = move |text: &str| {
+        let mut field = fields::get(id);
+
+        let changed = field.insert_text(text);
+        let text = field.text.clone();
+
+        fields::set(id, field);
+
+        if !changed {
+            return;
+        }
+
+        if let Some(on_change) = on_change.as_ref() {
+            on_change(text);
+        }
+    };
+
+    Rc::new(on_paste)
 }
 
 fn submit(id: &'static str, on_submit: Option<&TextHandler>, password: bool) {

@@ -24,6 +24,30 @@ impl Field {
         }
     }
 
+    /*
+     * text from the clipboard at the cursor; a field holds one line, so line
+     * breaks and tabs turn into spaces and other control characters are dropped
+     */
+    pub fn insert_text(&mut self, text: &str) -> bool {
+        let text = text.trim_end_matches(['\n', '\r']);
+
+        let mut inserted = false;
+
+        for letter in text.chars() {
+            let letter = match letter {
+                '\n' | '\r' | '\t' => ' ',
+                letter if letter.is_control() => continue,
+                letter => letter,
+            };
+
+            self.insert(letter);
+
+            inserted = true;
+        }
+
+        inserted
+    }
+
     pub fn before_cursor(&self) -> String {
         self.text.chars().take(self.cursor).collect()
     }
@@ -101,5 +125,20 @@ mod tests {
 
         assert_eq!(field.text, "hllo ");
         assert_eq!(field.cursor, 5);
+    }
+
+    #[test]
+    fn pastes_one_line_at_the_cursor() {
+        let mut field = Field::default();
+
+        field.insert_text("ab");
+        field.apply(Key::Left);
+
+        assert!(field.insert_text("x\ty\u{7}\n"));
+
+        assert_eq!(field.text, "ax yb");
+        assert_eq!(field.cursor, 4);
+
+        assert!(!field.insert_text("\n"));
     }
 }
