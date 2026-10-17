@@ -12,6 +12,9 @@ pub struct Method {
 
     pub(crate) name: String,
 
+    // the caller's unique name like :1.42
+    pub(crate) sender: String,
+
     pub(crate) arguments: Vec<Value>,
 }
 
@@ -29,6 +32,11 @@ impl Method {
 
     pub fn arguments(&self) -> &[Value] {
         &self.arguments
+    }
+
+    // the caller's unique name like :1.42, so a reply or a later call can find it again
+    pub fn sender(&self) -> &str {
+        &self.sender
     }
 
     // a failed reply means the caller already left, so there is nobody to tell
@@ -89,12 +97,16 @@ impl Iterator for Methods {
                 continue;
             };
 
-            let name = message.header().member().map(|name| name.to_string());
+            let header = message.header();
+
+            let name = header.member().map(|name| name.to_string());
+            let sender = header.sender().map(|sender| sender.to_string());
 
             let method = Method {
                 connection,
 
                 name: name.unwrap_or_default(),
+                sender: sender.unwrap_or_default(),
                 arguments: convert::arguments(&message),
 
                 message,

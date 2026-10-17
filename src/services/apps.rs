@@ -55,6 +55,16 @@ impl Apps {
     pub fn list(&self) -> &[DesktopApp] {
         &self.list
     }
+
+    /*
+     * the file for an icon name from the user's icon theme, like "firefox";
+     * it reads the disk, so call it from a service thread, not from a view
+     */
+    pub fn icon_path(name: &str) -> Option<std::path::PathBuf> {
+        static FOLDERS: std::sync::OnceLock<Vec<Vec<std::path::PathBuf>>> = std::sync::OnceLock::new();
+
+        icons::look_up_icon_file(name, FOLDERS.get_or_init(icons::read_icon_folders))
+    }
 }
 
 fn scan() -> Vec<DesktopApp> {
