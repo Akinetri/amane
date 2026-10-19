@@ -62,7 +62,20 @@ fn scrolled(scroll: Scroll) {
 | `Audio::toggle_mute()` | mutes or unmutes the speaker |
 | `Audio::set_microphone_volume(volume)` | sets the microphone volume, 0 to 100 |
 | `Audio::toggle_microphone_mute()` | mutes or unmutes the microphone |
+| `outputs()` | every speaker or headphone, as `AudioDevice`s |
+| `inputs()` | every microphone, as `AudioDevice`s, without the monitors that only replay an output |
+| `Audio::set_output(name)` | makes the output with that `name()` the default |
+| `Audio::set_input(name)` | makes the input with that `name()` the default |
 
-"Speaker" and "microphone" mean your default output and input devices. When you switch the default, for example by plugging in headphones, `Audio` follows.
+An `AudioDevice` gives:
+
+| Function | Gives |
+|---|---|
+| `name()` | the sound server's name for it, what `set_output` and `set_input` take |
+| `description()` | the name people read, like "Built-in Audio Analog Stereo" |
+| `icon()` | a freedesktop icon name like `audio-headphones`, empty when there is none |
+| `default()` | `true` for the device the volume and mute belong to |
+
+"Speaker" and "microphone" mean your default output and input devices. When you switch the default, for example by plugging in headphones or with `set_output`, `Audio` follows, and so do the apps that play without a device of their own.
 
 The control functions run on a background thread, so a slow sound server never freezes the shell. The new value shows up when the sound server announces it, usually right away.

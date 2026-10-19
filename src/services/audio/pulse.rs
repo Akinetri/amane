@@ -8,6 +8,7 @@ use libpulse_binding::context::subscribe::InterestMaskSet;
 use libpulse_binding::context::{Context, FlagSet, State};
 use libpulse_binding::mainloop::standard::{IterateResult, Mainloop};
 use libpulse_binding::operation::{self, Operation};
+use libpulse_binding::proplist::properties;
 use libpulse_binding::volume::{ChannelVolumes, Volume};
 
 #[derive(Clone, Copy)]
@@ -35,6 +36,21 @@ pub struct Level {
     pub volume: u8,
 
     pub muted: bool,
+}
+
+// one output or input the sound server knows, as pulse names it
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct AudioDevice {
+    // what pulse is told to make the default
+    pub(crate) name: String,
+
+    // the name people read, like "Built-in Audio Analog Stereo"
+    pub(crate) description: String,
+
+    // a freedesktop icon name like "audio-headphones", empty when pulse has none
+    pub(crate) icon: String,
+
+    pub(crate) default: bool,
 }
 
 // what pulse reports for a default device, before converting to percent
@@ -121,6 +137,22 @@ pub fn set_muted(device: Device, muted: bool) {
     });
 }
 
+// every output, or every input that isn't another output's monitor
+pub fn list(device: Device) -> Vec<AudioDevice> {
+    with_connection(|connection| connection.devices(device))
+}
+
+pub fn set_default(device: Device, name: &str) {
+    with_connection(|connection| {
+        let operation = match device {
+            Device::Output => connection.context.set_default_sink(name, |_| {}),
+            Device::Input => connection.context.set_default_source(name, |_| {}),
+        };
+
+        connection.wait(operation);
+    });
+}
+
 /*
  * calls changed after every change to an output, an input or the
  * default choice, and never returns; it keeps its own
@@ -164,9 +196,10 @@ fn follow(mut connection: Connection, changed: &mut impl FnMut()) {
     }
 }
 
+// fields drop in order, and the context has to go before the loop it runs on
 struct Connection {
-    mainloop: Mainloop,
     context: Context,
+    mainloop: Mainloop,
 }
 
 impl Connection {
@@ -178,7 +211,7 @@ impl Connection {
 
         context.connect(None, FlagSet::NOFLAGS, None).ok()?;
 
-        let mut connection = Self { mainloop, context };
+        let mut connection = Self { context, mainloop };
 
         loop {
             if !connection.iterate() {
@@ -236,6 +269,94 @@ impl Connection {
         found.take()
     }
 
+    fn devices(&mut self, device: Device) -> Vec<AudioDevice> {
+        let found = Rc::new(RefCell::new(Vec::new()));
+        let slot = Rc::clone(&found);
+
+        let introspect = self.context.introspect();
+
+        match device {
+            Device::Output => {
+                let operation = introspect.get_sink_info_list(move |result| {
+                    let ListResult::Item(sink) = result else {
+                        return;
+                    };
+
+                    slot.borrow_mut().push(AudioDevice {
+                        name: text(&sink.name),
+                        description: text(&sink.description),
+                        icon: sink
+                            .proplist
+                            .get_str(properties::DEVICE_ICON_NAME)
+                            .unwrap_or_default(),
+                        default: false,
+                    });
+                });
+
+                self.wait(operation);
+            }
+
+            Device::Input => {
+                let operation = introspect.get_source_info_list(move |result| {
+                    let ListResult::Item(source) = result else {
+                        return;
+                    };
+
+                    // a monitor only plays back what an output plays, it isn't a microphone
+                    if source.monitor_of_sink.is_some() {
+                        return;
+                    }
+
+                    slot.borrow_mut().push(AudioDevice {
+                        name: text(&source.name),
+                        description: text(&source.description),
+                        icon: source
+                            .proplist
+                            .get_str(properties::DEVICE_ICON_NAME)
+                            .unwrap_or_default(),
+                        default: false,
+                    });
+                });
+
+                self.wait(operation);
+            }
+        }
+
+        let default = self.default_name(device);
+
+        let mut devices = found.take();
+
+        for found_device in &mut devices {
+            found_device.default = default.as_deref() == Some(found_device.name.as_str());
+
+            // a device without a description still needs something to show
+            if found_device.description.is_empty() {
+                found_device.description = found_device.name.clone();
+            }
+        }
+
+        devices
+    }
+
+    // the name behind @DEFAULT_SINK@ or @DEFAULT_SOURCE@ right now
+    fn default_name(&mut self, device: Device) -> Option<String> {
+        let found = Rc::new(RefCell::new(None));
+        let slot = Rc::clone(&found);
+
+        let operation = self.context.introspect().get_server_info(move |server| {
+            let name = match device {
+                Device::Output => &server.default_sink_name,
+                Device::Input => &server.default_source_name,
+            };
+
+            *slot.borrow_mut() = name.as_ref().map(|name| name.to_string());
+        });
+
+        self.wait(operation);
+
+        found.take()
+    }
+
     // blocks until pulse has answered
     fn wait<F: ?Sized>(&mut self, operation: Operation<F>) {
         while operation.get_state() == operation::State::Running {
@@ -255,6 +376,10 @@ impl Connection {
 
         matches!(result, IterateResult::Success(_))
     }
+}
+
+fn text(value: &Option<std::borrow::Cow<'_, str>>) -> String {
+    value.as_deref().map(String::from).unwrap_or_default()
 }
 
 // pulse counts volume with 100% at Volume::NORMAL
