@@ -125,6 +125,33 @@ impl Bus {
         let _ = connection.emit_signal(None::<&str>, path, interface, name, &body);
     }
 
+    /*
+     * like emit, but only destination hears it, a unique name like :1.42;
+     * for answers meant for one program, which others may mistake for theirs
+     */
+    pub fn emit_to(
+        &self,
+        destination: &str,
+        path: &str,
+        interface: &str,
+        name: &str,
+        arguments: &[Argument],
+    ) {
+        let Some(connection) = self.connection else {
+            return;
+        };
+
+        if arguments.is_empty() {
+            let _ = connection.emit_signal(Some(destination), path, interface, name, &());
+
+            return;
+        }
+
+        let body = convert::body(arguments);
+
+        let _ = connection.emit_signal(Some(destination), path, interface, name, &body);
+    }
+
     // false when another program already owns the name, amane never takes it from them
     pub fn own(&self, name: &str) -> bool {
         let Some(connection) = self.connection else {

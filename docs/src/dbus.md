@@ -198,3 +198,4 @@ busctl --user call org.example.Shell /org/example/Shell org.example.Shell Ping
 - `methods(path, interface)` waits for each call to that object and interface.
 - `method.arguments()` gives the call's arguments, `method.sender()` the caller's unique name like `:1.42`, and `method.reply(...)` answers it.
 - `bus.emit(path, interface, name, &arguments![...])` sends a signal of your own.
+- `bus.emit_to(destination, path, interface, name, &arguments![...])` sends it to one program only, by its unique name like `:1.42` from `method.sender()`.

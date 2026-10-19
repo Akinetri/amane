@@ -100,7 +100,7 @@ impl Notifications {
 
         let resident = notification.resident;
 
-        server::announce_action(id, key);
+        server::announce_action(&notification.sender, id, key);
 
         if !resident {
             self.close(id, Reason::Dismissed);
@@ -145,6 +145,6 @@ impl Notifications {
 
         image_hint::remove(&closed.image);
 
-        server::announce_closed(id, reason);
+        server::announce_closed(&closed.sender, id, reason);
     }
 }

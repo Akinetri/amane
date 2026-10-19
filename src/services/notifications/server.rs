@@ -66,6 +66,7 @@ fn notify(method: &Method) {
         id: 0,
 
         app_name: String::from(app_name.text()),
+        sender: String::from(method.sender()),
         summary: String::from(summary.text()),
         body: String::from(body.text()),
         icon: String::from(icon.text()),
@@ -147,14 +148,19 @@ fn send_information(method: &Method) {
 }
 
 // the sender hears which button was pressed, and does the rest itself
-pub fn announce_action(id: u32, key: &str) {
+/*
+ * ids start over with every shell, so another program may still hold one from
+ * an earlier run; sent to everyone, a click on one app's notification could
+ * open another, so only the sender hears about its own
+ */
+pub fn announce_action(sender: &str, id: u32, key: &str) {
     let arguments = [Argument::from(id), Argument::from(key)];
 
-    Bus::session().emit(PATH, INTERFACE, "ActionInvoked", &arguments);
+    Bus::session().emit_to(sender, PATH, INTERFACE, "ActionInvoked", &arguments);
 }
 
-pub fn announce_closed(id: u32, reason: Reason) {
+pub fn announce_closed(sender: &str, id: u32, reason: Reason) {
     let arguments = [Argument::from(id), Argument::from(reason as u32)];
 
-    Bus::session().emit(PATH, INTERFACE, "NotificationClosed", &arguments);
+    Bus::session().emit_to(sender, PATH, INTERFACE, "NotificationClosed", &arguments);
 }

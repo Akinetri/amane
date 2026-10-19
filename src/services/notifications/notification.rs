@@ -6,6 +6,9 @@ pub struct Notification {
 
     pub(crate) app_name: String,
 
+    // the bus name of the program that sent it, the only one told about clicks and closing
+    pub(crate) sender: String,
+
     pub(crate) summary: String,
 
     pub(crate) body: String,
